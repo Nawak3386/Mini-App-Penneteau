@@ -1,0 +1,506 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body{margin:0;font-family:Arial,sans-serif;background:#0b0f19;color:white;padding:12px}
+    .app{max-width:1100px;margin:auto}
+    .brand{text-align:center;margin:10px 0 18px}
+    .brand-main{font-family:Georgia,serif;font-style:italic;font-size:44px;margin:0;color:white}
+    .brand-sub{color:#ef4444;font-weight:900;letter-spacing:2px}
+    .card{background:#171923;border:1px solid #2f3544;border-radius:22px;padding:16px;margin-bottom:14px}
+    h1{margin:0;font-size:32px}
+    .hint{color:#cbd5e1;font-size:14px}
+    .grid{display:grid;grid-template-columns:1fr;gap:11px}
+    label{display:grid;gap:6px;font-weight:800;color:#d4d4d8;font-size:13px}
+    input,select{min-height:52px;border:1px solid #3f4658;background:#070a12;color:white;border-radius:16px;padding:12px;font-size:16px}
+    input:disabled{opacity:.7}
+    .summary{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:sticky;top:0;background:#0b0f19;padding:8px 0;z-index:10}
+    .stat{background:#171923;border:1px solid #2f3544;border-radius:16px;padding:10px}
+    .stat small{color:#a1a1aa;font-weight:800}
+    .stat strong{display:block;font-size:26px;margin-top:6px}
+    .red{background:#641e1e}
+    .green{background:#064e3b}
+    .blue{background:#1e3a8a}
+    .day h3{font-size:25px;margin:0 0 10px}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .friday{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.5);border-radius:16px;padding:12px;color:#fecaca;margin:12px 0}
+    .checkline{display:flex;align-items:center;gap:10px;background:#070a12;border:1px solid #3f4658;border-radius:16px;padding:12px;font-weight:900}
+    .checkline input{width:22px;min-height:22px}
+    button{width:100%;min-height:54px;border:0;border-radius:18px;font-weight:900;font-size:16px;margin:6px 0;cursor:pointer}
+    .primary{background:white;color:#111827}
+    .secondary{background:#27272a;color:white;border:1px solid #52525b}
+    .danger{background:#7f1d1d;color:white}
+    #status{text-align:center;font-weight:900;margin:12px 0}
+    .ecart{font-size:18px;font-weight:900;margin-top:10px}
+    .ok{color:#86efac}
+    .moins{color:#fca5a5}
+    .plus{color:#86efac}
+    @media(min-width:800px){
+      .grid{grid-template-columns:repeat(3,1fr)}
+      .summary{position:static;grid-template-columns:repeat(4,1fr)}
+      .days{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+    }
+  </style>
+</head>
+
+<body>
+<div class="app">
+  <div class="brand">
+    <p class="brand-main">P. Penneteau</p>
+    <div class="brand-sub">PEINTURE - SOL - PLAFOND TENDU</div>
+  </div>
+
+  <div class="card">
+    <h1>Feuille d’heures</h1>
+    <p class="hint">La page peut être sauvegardée manuellement. Remplis au jour le jour, puis envoie la semaine au patron.</p>
+
+    <div class="grid">
+      <label>Salarié
+        <select id="salarie">
+          <option>Jérémy</option>
+          <option>Damien</option>
+        </select>
+      </label>
+
+      <label>Semaine / période
+        <input id="semaine" placeholder="ex : Semaine 20 ou du 13/05 au 17/05">
+      </label>
+
+      <label>Base contrat hebdo
+        <input id="baseContrat" type="number" value="36" step="0.25">
+      </label>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="stat"><small>Total travaillé</small><strong id="totalSemaine">0h00</strong></div>
+    <div class="stat red"><small>➖ À devoir</small><strong id="aDevoir">0h00</strong></div>
+    <div class="stat green"><small>➕ À déduire</small><strong id="aDeduire">0h00</strong></div>
+    <div class="stat blue"><small>Solde semaine</small><strong id="solde">0h00</strong></div>
+  </div>
+
+  <h2>Jours de la semaine</h2>
+  <div class="days" id="days"></div>
+
+  <button class="secondary" onclick="sauvegarder()">💾 Sauvegarder</button>
+  <button class="primary" onclick="envoyer()">✅ Envoyer au patron</button>
+  <button class="danger" onclick="nouvelleSemaine()">🗑️ Nouvelle semaine</button>
+  <button class="secondary" onclick="window.print()">🖨️ Imprimer / PDF</button>
+
+  <div id="status"></div>
+</div>
+
+<script>
+const STORAGE_KEY = "feuille_heures_penneteau_v4";
+const SALARIE_KEY = "dernierSalarie";
+
+const jours = [
+  {jour:"Lundi", debut:"08:00", fin:"16:30", pause:"30", vendredi:false, prevu:480},
+  {jour:"Mardi", debut:"08:00", fin:"16:30", pause:"30", vendredi:false, prevu:480},
+  {jour:"Mercredi", debut:"08:00", fin:"16:30", pause:"30", vendredi:false, prevu:480},
+  {jour:"Jeudi", debut:"08:00", fin:"16:30", pause:"30", vendredi:false, prevu:480},
+  {jour:"Vendredi", debut:"08:00", fin:"12:00", pause:"0", vendredi:true, prevu:240}
+];
+
+function min(t){
+  if(!t) return 0;
+  let p=t.split(":");
+  return (+p[0]||0)*60+(+p[1]||0);
+}
+
+function formatMinutes(minutes){
+  minutes = Math.round(Math.abs(minutes));
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h + "h" + String(m).padStart(2, "0");
+}
+
+function calculZone(km){
+  if(km === "" || km === null || km === undefined){
+    return "-";
+  }
+
+  km = Number(km);
+
+  if(km <= 5) return "Zone 1A";
+  if(km <= 10) return "Zone 1B";
+  if(km <= 20) return "Zone 2";
+  if(km <= 30) return "Zone 3";
+  if(km <= 40) return "Zone 4";
+  if(km <= 50) return "Zone 5";
+  return "Hors zone";
+}
+
+function pauseLabel(value){
+  if(value === "0") return "Aucune pause";
+  if(value === "30") return "30 min";
+  if(value === "60") return "1 h";
+  return value + " min";
+}
+
+function build(){
+  const box=document.getElementById("days");
+  box.innerHTML = "";
+
+  jours.forEach(j=>{
+    box.innerHTML += `
+    <div class="card day" data-jour="${j.jour}" data-prevu="${j.prevu}">
+      <h3>${j.jour}</h3>
+
+      <label>Date du jour
+        <input type="date" class="date">
+      </label>
+
+      <label>Nom du chantier
+        <input class="chantier" placeholder="Nom du chantier">
+      </label>
+
+      <div class="two">
+        <label>Début réel
+          <input type="time" class="debut" value="${j.debut}">
+        </label>
+
+        <label>Fin réelle
+          <input type="time" class="fin" value="${j.fin}">
+        </label>
+      </div>
+
+      <label>Pause déjeuner
+        <select class="pause">
+          <option value="30" ${j.pause==="30" ? "selected" : ""}>30 min</option>
+          <option value="60" ${j.pause==="60" ? "selected" : ""}>1 h</option>
+          <option value="0" ${j.pause==="0" ? "selected" : ""}>Aucune pause</option>
+        </select>
+      </label>
+
+      ${j.vendredi ? `
+      <div class="friday">
+        Vendredi prévu : 08h00 → 12h00, sans pause = 4h00.
+        <label class="checkline">
+          <input type="checkbox" class="exception" onchange="toggleFriday(this)">
+          Après-midi exceptionnel
+        </label>
+      </div>` : ""}
+
+      <label>Distance entreprise → chantier (km)
+        <input type="number" class="distanceKm" min="0" step="0.1" placeholder="Ex : 18">
+      </label>
+
+      <label>Zone déplacement
+        <input class="zone" readonly>
+      </label>
+
+      <label>Note
+        <input class="note" placeholder="Optionnel">
+      </label>
+
+      <p><b>Total réel : <span class="totalJour">0h00</span></b></p>
+      <p><b>Prévu : <span class="prevuJour">${formatMinutes(j.prevu)}</span></b></p>
+      <p class="ecart"><span class="ecartJour ok">Non rempli</span></p>
+    </div>`;
+  });
+
+  document.querySelectorAll("input,select").forEach(e=>{
+    e.addEventListener("input",()=>{calculer(); sauvegarderAuto();});
+    e.addEventListener("change",()=>{calculer(); sauvegarderAuto();});
+  });
+
+  document.getElementById("salarie").addEventListener("change", function(){
+    localStorage.setItem(SALARIE_KEY, this.value);
+    sauvegarderAuto();
+  });
+
+  restaurer();
+  calculer();
+}
+
+function toggleFriday(cb){
+  const c=cb.closest(".day");
+  const fin=c.querySelector(".fin");
+  const pause=c.querySelector(".pause");
+
+  if(cb.checked){
+    if(fin.value==="12:00") fin.value="16:30";
+    pause.value="30";
+  } else {
+    fin.value="12:00";
+    pause.value="0";
+  }
+
+  calculer();
+  sauvegarderAuto();
+}
+
+function jourRempli(c){
+  return !!(c.querySelector(".date").value || c.querySelector(".chantier").value.trim());
+}
+
+function totalCardMinutes(c){
+  if(!jourRempli(c)){
+    return 0;
+  }
+
+  const debut = c.querySelector(".debut").value;
+  const fin = c.querySelector(".fin").value;
+  const pause = Number(c.querySelector(".pause").value) || 0;
+
+  let minutes = min(fin) - min(debut) - pause;
+  if(minutes < 0) minutes = 0;
+
+  return minutes;
+}
+
+function calculer(){
+  let total=0;
+  let aDevoir=0;
+  let aDeduire=0;
+
+  document.querySelectorAll(".day").forEach(c=>{
+    const h = totalCardMinutes(c);
+    const prevu = Number(c.dataset.prevu);
+    const ecart = h - prevu;
+
+    c.querySelector(".totalJour").textContent = formatMinutes(h);
+    c.querySelector(".zone").value = calculZone(c.querySelector(".distanceKm").value);
+
+    const ecartBox = c.querySelector(".ecartJour");
+
+    if(!jourRempli(c)){
+      ecartBox.textContent = "Non rempli";
+      ecartBox.className = "ecartJour ok";
+      return;
+    }
+
+    total += h;
+
+    if(ecart < 0){
+      aDevoir += Math.abs(ecart);
+      ecartBox.textContent = "➖ " + formatMinutes(ecart) + " à devoir";
+      ecartBox.className = "ecartJour moins";
+    } else if(ecart > 0){
+      aDeduire += ecart;
+      ecartBox.textContent = "➕ " + formatMinutes(ecart) + " à déduire";
+      ecartBox.className = "ecartJour plus";
+    } else {
+      ecartBox.textContent = "OK";
+      ecartBox.className = "ecartJour ok";
+    }
+  });
+
+  const balance = aDeduire - aDevoir;
+
+  totalSemaine.textContent = formatMinutes(total);
+  document.getElementById("aDevoir").textContent = "➖ " + formatMinutes(aDevoir);
+  document.getElementById("aDeduire").textContent = "➕ " + formatMinutes(aDeduire);
+
+  if(balance > 0){
+    solde.textContent = "➕ " + formatMinutes(balance);
+  } else if(balance < 0){
+    solde.textContent = "➖ " + formatMinutes(balance);
+  } else {
+    solde.textContent = "0h00";
+  }
+}
+
+function collecterData(){
+  const data={
+    salarie: document.getElementById("salarie").value,
+    semaine: document.getElementById("semaine").value,
+    baseContrat: document.getElementById("baseContrat").value,
+    lignes: []
+  };
+
+  document.querySelectorAll(".day").forEach(c=>{
+    const date = c.querySelector(".date").value;
+    const chantier = c.querySelector(".chantier").value.trim();
+
+    if(!date && !chantier){
+      return;
+    }
+
+    const totalMinutes = totalCardMinutes(c);
+    const prevu = Number(c.dataset.prevu);
+    const ecart = totalMinutes - prevu;
+
+    let typeHeure = "OK";
+    let heuresSup = "0h00";
+    let ecartAffiche = "0h00";
+
+    if(ecart < 0){
+      typeHeure = "➖ À devoir";
+      ecartAffiche = "➖ " + formatMinutes(ecart);
+    } else if(ecart > 0){
+      typeHeure = "➕ À déduire";
+      heuresSup = formatMinutes(ecart);
+      ecartAffiche = "➕ " + formatMinutes(ecart);
+    }
+
+    data.lignes.push({
+      jour:c.dataset.jour,
+      date:date,
+      debut:c.querySelector(".debut").value,
+      fin:c.querySelector(".fin").value,
+      pause:pauseLabel(c.querySelector(".pause").value),
+      typeHeure:typeHeure,
+      heuresSup:heuresSup,
+      totalJour:formatMinutes(totalMinutes),
+      chantier:chantier,
+      distanceKm:c.querySelector(".distanceKm").value,
+      zone:c.querySelector(".zone").value,
+      note:c.querySelector(".note").value,
+      ecart:ecartAffiche
+    });
+  });
+
+  return data;
+}
+
+function collecterFormulaireComplet(){
+  const data={
+    salarie: document.getElementById("salarie").value,
+    semaine: document.getElementById("semaine").value,
+    baseContrat: document.getElementById("baseContrat").value,
+    jours:[]
+  };
+
+  document.querySelectorAll(".day").forEach(c=>{
+    data.jours.push({
+      jour:c.dataset.jour,
+      date:c.querySelector(".date").value,
+      chantier:c.querySelector(".chantier").value,
+      debut:c.querySelector(".debut").value,
+      fin:c.querySelector(".fin").value,
+      pause:c.querySelector(".pause").value,
+      exception:c.querySelector(".exception") ? c.querySelector(".exception").checked : false,
+      distanceKm:c.querySelector(".distanceKm").value,
+      note:c.querySelector(".note").value
+    });
+  });
+
+  return data;
+}
+
+function sauvegarderAuto(){
+  const data = collecterFormulaireComplet();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  localStorage.setItem(SALARIE_KEY, document.getElementById("salarie").value);
+}
+
+function sauvegarder(){
+  sauvegarderAuto();
+  status.textContent = "💾 Sauvegardé sur cet appareil";
+}
+
+function restaurer(){
+  const dernierSalarie = localStorage.getItem(SALARIE_KEY);
+  if(dernierSalarie){
+    document.getElementById("salarie").value = dernierSalarie;
+  }
+
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if(!saved) return;
+
+  try{
+    const data = JSON.parse(saved);
+
+    document.getElementById("salarie").value = data.salarie || dernierSalarie || "Jérémy";
+    document.getElementById("semaine").value = data.semaine || "";
+    document.getElementById("baseContrat").value = data.baseContrat || "36";
+
+    document.querySelectorAll(".day").forEach((c,i)=>{
+      const j = data.jours && data.jours[i];
+      if(!j) return;
+
+      c.querySelector(".date").value = j.date || "";
+      c.querySelector(".chantier").value = j.chantier || "";
+      c.querySelector(".debut").value = j.debut || jours[i].debut;
+      c.querySelector(".fin").value = j.fin || jours[i].fin;
+      c.querySelector(".pause").value = j.pause || jours[i].pause;
+      c.querySelector(".distanceKm").value = j.distanceKm || "";
+      c.querySelector(".note").value = j.note || "";
+
+      if(c.querySelector(".exception")){
+        c.querySelector(".exception").checked = !!j.exception;
+      }
+    });
+
+    status.textContent = "✅ Semaine restaurée depuis cet appareil";
+  }catch(e){
+    status.textContent = "⚠️ Sauvegarde locale illisible";
+  }
+}
+
+function nouvelleSemaine(){
+  if(!confirm("Vider la semaine en cours sur cet appareil ?")) return;
+
+  localStorage.removeItem(STORAGE_KEY);
+
+  document.getElementById("semaine").value = "";
+  document.getElementById("baseContrat").value = "36";
+
+  document.querySelectorAll(".day").forEach((c, i)=>{
+    const j = jours[i];
+
+    c.querySelector(".date").value = "";
+    c.querySelector(".chantier").value = "";
+    c.querySelector(".debut").value = j.debut;
+    c.querySelector(".fin").value = j.fin;
+    c.querySelector(".pause").value = j.pause;
+    c.querySelector(".distanceKm").value = "";
+    c.querySelector(".zone").value = "";
+    c.querySelector(".note").value = "";
+
+    if(c.querySelector(".exception")){
+      c.querySelector(".exception").checked = false;
+    }
+  });
+
+  calculer();
+  status.textContent = "🗑️ Nouvelle semaine prête";
+}
+
+function envoyer(){
+  calculer();
+
+  const data = collecterData();
+
+  if(data.lignes.length === 0){
+    status.textContent="⚠️ Aucune journée remplie à envoyer.";
+    return;
+  }
+
+  status.textContent="⏳ Envoi en cours...";
+
+  google.script.run
+    .withSuccessHandler((soldeFinal)=>{
+  const message = soldeFinal
+    ? "✅ Envoyé au Google Sheets — Solde cumulé : " + soldeFinal
+    : "✅ Envoyé au Google Sheets";
+
+  document.getElementById("status").textContent = message;
+  alert(message);
+  sauvegarderAuto();
+})
+    .withFailureHandler(err=>{
+      status.textContent="❌ Erreur : " + err.message;
+    })
+    .enregistrerSemaine(data);
+}
+
+setInterval(() => {
+  sauvegarderAuto();
+}, 5000);
+
+window.addEventListener("beforeunload", () => {
+  sauvegarderAuto();
+});
+
+build();
+</script>
+</body>
+</html>
