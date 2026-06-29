@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-title" content="Penneteau">
+  <meta name="application-name" content="Penneteau">
+  <meta name="theme-color" content="#0b0f19">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="180x180" href="apple-touch-icon.png">
+  <title>Penneteau</title>
+  <style>
+    html,body{height:100%;margin:0;background:#0b0f19;color:white;font-family:Arial,sans-serif}
+    body{display:grid;place-items:center;text-align:center;padding:24px}
+    a{color:white;font-weight:900}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Penneteau</h1>
+    <p>Ouverture de l'application...</p>
+    <p><a id="openApp" href="#">Ouvrir l'application</a></p>
+  </main>
+
+  <script>
+    const APP_URL = "https://script.google.com/macros/s/AKfycbwBFRaRvZCHn4GHQlqiqg5LxnRGEGN5wND8OScfO5HYXOAb0OD_8FLMpxmFYnHTgRQ5/exec";
+
+    const openApp = document.getElementById("openApp");
+    openApp.href = APP_URL;
+
+    if (!APP_URL.includes("REMPLACE_MOI")) {
+      window.location.replace(APP_URL);
+    }
+  </script>
+</body>
+</html>
